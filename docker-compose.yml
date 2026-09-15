@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: qpl
+      POSTGRES_PASSWORD: qpl
+      POSTGRES_DB: qpl
+    ports:
+      - "127.0.0.1:${QPL_PORT:-54329}:5432"
+    shm_size: 2gb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qpl -d qpl"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  pgdata:
