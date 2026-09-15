@@ -1,4 +1,5 @@
 PYTHON ?= python3
+.DEFAULT_GOAL := all
 PY = .venv/bin/python
 COMPOSE ?= docker compose
 export MPLCONFIGDIR := $(CURDIR)/.mplconfig

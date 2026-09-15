@@ -77,7 +77,27 @@ def main():
               "| Configuration | Index | Build seconds | Size | Bytes |", "|---|---|---:|---|---:|"]
     for row in indexes.itertuples():
         lines.append(f"| {row.config} | `{row.index_name}` | {row.build_ms/1000:.3f} | {row.size_pretty} | {row.size_bytes:,} |")
-    lines += ["", "Exact DDL is in [index_meta.csv](results/index_meta.csv). B-tree column order, partial predicates, covering columns, BRIN range summaries, and GIN containment keys solve different access problems; compare query savings against both build cost and storage.", "", "## Annotated plans", ""]
+    lines += ["", "Exact DDL is in [index_meta.csv](results/index_meta.csv).", "", "## Findings", ""]
+    for query in ["q1_range_filter", "q2_join_aggregate"]:
+        times = med.xs(query, level="query")
+        best = times.idxmin()
+        lines.append(f"- **{query}:** {best} is fastest at {times.loc[best]:.3f} ms versus "
+                     f"{times.loc['c0_none']:.3f} ms without a secondary index ({times.loc['c0_none']/times.loc[best]:.2f}×).")
+    common_factor = med.loc[("c0_none", "q3a_jsonb_common")] / med.loc[("c7_gin_payload", "q3a_jsonb_common")]
+    lines.append(f"- **Containment selectivity:** GIN's baseline/index time ratio is {common_factor:.2f}× for the "
+                 f"{dataset['mobile_selectivity']:.2%} mobile probe, compared with {speedup:.2f}× for the "
+                 f"{dataset['beta_selectivity']:.2%} beta probe. Values below 1 indicate a slowdown.")
+    brin = indexes[indexes.config == "c6_brin_ts"].iloc[0]
+    covering = indexes[indexes.config == "c5_btree_covering"].iloc[0]
+    lines.append(f"- **Storage tradeoff:** BRIN occupies {brin.size_pretty}, while the covering B-tree occupies "
+                 f"{covering.size_pretty}. Their q1 medians are "
+                 f"{med.loc[('c6_brin_ts', 'q1_range_filter')]:.3f} ms and "
+                 f"{med.loc[('c5_btree_covering', 'q1_range_filter')]:.3f} ms respectively. "
+                 "The observed physical ordering supports BRIN; this result should not be generalized to randomly ordered heaps.")
+    lines.append(f"- **Column order:** q1 takes {med.loc[('c2_btree_ts_status', 'q1_range_filter')]:.3f} ms with "
+                 f"(created_at, status), and {med.loc[('c3_btree_status_ts', 'q1_range_filter')]:.3f} ms with "
+                 "(status, created_at). The latter can bound the equality predicate before the timestamp range.")
+    lines += ["", "## Annotated plans", ""]
     for config, query, title, note in [
         ("c0_none", "q1_range_filter", "Sequential baseline", "The filter discards rows after reading the heap; compare its removed-row count with the output count."),
         ("c5_btree_covering", "q1_range_filter", "Covering index", "The index includes every selected column. Heap Fetches shows whether visibility checks still needed heap access."),
