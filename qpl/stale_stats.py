@@ -48,6 +48,60 @@ def markdown(data):
     lines += ["", f"Inserted rows cleaned up: **{'yes' if data['cleaned_up'] else 'no'}**.", ""]
     return "\n".join(lines)
 
+def compact_join(plan):
+    """Show the join and its inputs without confusing output rows with loops."""
+    join = next(n for n in walk(plan[0]["Plan"])
+                if n["Node Type"] in {"Nested Loop", "Hash Join", "Merge Join"})
+    lines = []
+
+    def visit(node, depth=0):
+        prefix = "  " * depth
+        label = ("Parallel " if node.get("Parallel Aware") else "") + node["Node Type"]
+        if node.get("Index Name"):
+            label += " using " + node["Index Name"]
+        elif node.get("Relation Name"):
+            label += " on " + node["Relation Name"]
+        counts = ", ".join(f"{k}: {node[k]}" for k in ("Plan Rows", "Actual Rows", "Actual Loops"))
+        if node.get("Relation Name") == "accounts":
+            lines.extend([prefix + label, prefix + "  " + counts,
+                          prefix + f"  Shared Hit Blocks: {node.get('Shared Hit Blocks', 0)}, "
+                          f"Shared Read Blocks: {node.get('Shared Read Blocks', 0)}"])
+        else:
+            lines.append(prefix + label + ": " + counts)
+        for child in node.get("Plans", []):
+            visit(child, depth + 1)
+
+    visit(join)
+    return "\n".join(lines)
+
+def readme_excerpt(data):
+    """Short measured summary; complete JSON remains in the saved plan files."""
+    before, after = data["before"]["metrics"], data["after"]["metrics"]
+    lines = ["## Stale statistics", "",
+        f"Append {data['inserted_rows']:,} events beyond the old timestamp histogram, then run the same join before and after ANALYZE. Both phases use only primary-key indexes and report the median of five runs after a warm-up.", "",
+        "| Statistics | Median ms | Estimated events rows/participant | Actual events rows total | Raw ratio | Normalized ratio |",
+        "|---|---:|---:|---:|---:|---:|"]
+    for title, row in [("Before ANALYZE", before), ("After ANALYZE", after)]:
+        lines.append(f"| {title} | {row['execution_ms']:.3f} | {row['plan_rows']:,} | {row['actual_rows']:,} | "
+                     f"{row['est_ratio']:.3f} | {row['normalized_est_ratio']:.3f} |")
+    lines += ["", f"ANALYZE improved execution time by **{data['speedup']:.2f}×**. Normalized ratios compare total actual and estimated rows, accounting for parallel participants. EXPLAIN rounds per-loop averages, so multiplying them can differ slightly from the exact Gather output."]
+    inner = next(n for n in walk(data["before"]["plan"][0]["Plan"])
+                 if n.get("Relation Name") == "accounts")
+    lines += ["", f"The underestimate is the finding; the modest speedup reflects cached inner lookups. "
+        f"`{inner.get('Index Name', inner['Node Type'])}` ran {inner['Actual Loops']:,} times with "
+        f"**{inner.get('Shared Hit Blocks', 0):,} shared hits and {inner.get('Shared Read Blocks', 0):,} shared reads**. "
+        "Repeated in-memory probes are survivable. The same underestimate could be much more costly with a larger inner relation or cache misses; that scenario was not measured here."]
+    for phase, title in [("before", "Before ANALYZE"), ("after", "After ANALYZE")]:
+        plan = data[phase]["plan"]
+        path = next(p for run in range(1, 6)
+                    if (p := RESULTS / "plans" / f"stale__{phase}__run{run}.json").exists()
+                    and json.loads(p.read_text()) == plan)
+        lines += ["", f"### {title}", "", "```text", compact_join(plan), "```", "",
+                  f"[Full JSON plan](results/plans/{path.name})."]
+    lines += ["", "The inner index scan's loop count is distinct from the nested loop's output row count. "
+              "[Full experiment and cleanup record](results/stale_stats.md).", ""]
+    return "\n".join(lines)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cleanup", action="store_true", help="Delete appended rows and refresh statistics, including on failure")

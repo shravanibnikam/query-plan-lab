@@ -8,26 +8,21 @@ from .indexes import CONFIGS
 from .plan_parse import excerpt
 from .queries import QUERIES
 from .validate import checks
+from .stale_stats import readme_excerpt
 
 DECISIONS = """## Decisions
 
-- Local port 54329, local-only published interface, dedicated `qpl` database and development credentials. Override `QPL_PORT`; `QPL_DSN` permits another PostgreSQL 16 instance with matching settings.
-- `make all` recreates the two tables each time, giving repeatable physical layout even after a failed load. `make bench` reuses a loaded base dataset. `make stale` cleans up its appended rows. `make clean` removes the project's database volume and generated artifacts.
-- The fixed timeline is January 1, 2024 through January 1, 2026 (exclusive), at one-second resolution. Timestamps use `1 - U³` so recent months contain more rows, then are globally sorted. Closed intervals are uniform from one second through 14 days.
-- Accounts are created on January 1, 2023. Regions NA/EU/APAC/LATAM/MEA/OCE have weights .38/.27/.18/.09/.05/.03; free/basic/pro/enterprise tiers have weights .50/.30/.17/.03. Zipf exponent is 1.3 and IDs above 200,000 are clipped, which also creates a tail spike at account 200,000.
-- Amounts use lognormal parameters μ=3.5, σ=1.2. Template selection is uniform across 5,000 unique templates: 1,750 mobile templates and 25 beta templates distributed across sources. Timestamps, statuses, amounts, and payloads are otherwise independent.
-- COPY batches contain 500,000 rows, streamed in 10,000-row text blocks. A batch failure stops the pipeline; rerun `make load` to reset. All random draws come from `numpy.random.default_rng(20260101)`; the stale phase restarts that seeded stream independently.
-- Explicit VACUUM after loading sets visibility-map bits for index-only scans. Autovacuum on events stays disabled. Every configuration analyzes both tables; statistics sampling and worker scheduling can still vary between executions.
-- The stale case uses only primary-key indexes in both phases: a timestamp B-tree lets PostgreSQL inspect the current maximum during planning, which weakens the intended stale-histogram experiment. It temporarily grows the table to 10.5 million rows, then deletes the extra 500,000 and vacuums/analyzes. This is the specification's append experiment; the base matrix stays at 10 million. Six runs per phase allow median reporting. Plans are never forced, and join changes or speedups are not guaranteed.
-- `run0` is the discarded warm-up; runs 1–5 are retained. These are warm-cache experiments without OS cache flushing. Execution includes EXPLAIN instrumentation but excludes Python transfer and planning; index build timings are client wall time. Prepared statements are disabled to avoid generic-plan transitions.
-- CSV `plan_rows` preserves the raw scan estimate and `actual_rows` is Actual Rows × Actual Loops, including parallel participants exactly once. The required raw `est_ratio` divides those values. Added `estimated_total_rows` and `normalized_est_ratio` account for PostgreSQL 16's parallel divisor (workers plus the leader's estimated contribution); diagnostic tables and stale acceptance use this comparable-total ratio. Worker counts and per-loop values are retained. The leader-participation default is required.
-- Requested buffer/I/O sums across the plan tree are retained, but are inclusive and double-count child work. Added `root_*` fields are the statement-level counters; use those for I/O comparisons. Buffers are accesses, not unique pages.
-- Plan excerpts use the median-time run, and result-table scan labels list every observed scan type. Hardware-sensitive acceptance checks fail visibly after the README is generated; observed findings are never replaced with expected numbers. Dependencies are pinned, while the requested `postgres:16` tag can receive patch updates; the actual server version is recorded.
-- This project adds `report.py`, `validate.py`, standard-library unittest tests, and JSON provenance alongside the requested skeleton. No extra runtime libraries beyond the specified stack are introduced.
+- Fixed seed, fixed dates, and globally ordered timestamps; the clipped Zipf distribution is disclosed.
+- One warm-up and five kept runs per query; report medians from a single machine with warm caches.
+- Explicit vacuum enables index-only scans; the stale case keeps only primary-key indexes and cleans up its appended rows.
+- Normalize parallel row estimates, preserve raw counts, and use root buffer counters to avoid counting child work twice.
+- Pin dependencies and server settings, record the actual server version, and report failed expectations without forcing plans.
 
-## Reading the measurements
+See [Methodology](docs/METHODOLOGY.md) for all generation choices, parsing rules, sources, and limitations. See [Explaining the results](docs/EXPLAINING_RESULTS.md) for plan-reading examples and the write-amplification discussion.
 
-PostgreSQL reports actual rows per loop and inclusive buffer counters; see the [PostgreSQL 16 EXPLAIN documentation](https://www.postgresql.org/docs/16/sql-explain.html) and [EXPLAIN guide](https://www.postgresql.org/docs/16/using-explain.html). The stale-case index choice follows [PostgreSQL 16’s endpoint estimation](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/backend/utils/adt/selfuncs.c). The parallel estimate adjustment follows [PostgreSQL 16's costsize.c](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/backend/optimizer/path/costsize.c). Loading uses Psycopg's [block COPY interface](https://www.psycopg.org/psycopg3/docs/basic/copy.html).
+## License
+
+[MIT](LICENSE).
 """
 
 def main():
@@ -40,9 +35,17 @@ def main():
     stale = json.loads((RESULTS / "stale_stats.json").read_text())
     med = runs.groupby(["config", "query"])["execution_ms"].median()
     speedup = med.loc[("c0_none", "q3b_jsonb_rare")] / med.loc[("c7_gin_payload", "q3b_jsonb_rare")]
+    common_base = med.loc[("c0_none", "q3a_jsonb_common")]
+    common_gin = med.loc[("c7_gin_payload", "q3a_jsonb_common")]
+    partial_ms = med.loc[("c4_btree_partial", "q1_range_filter")]
+    covering_ms = med.loc[("c5_btree_covering", "q1_range_filter")]
+    partial = indexes[indexes.config == "c4_btree_partial"].iloc[0]
+    covering = indexes[indexes.config == "c5_btree_covering"].iloc[0]
     lines = ["# Query Plan Lab", "",
+        "[![Tests](https://github.com/shravanibnikam/query-plan-lab/actions/workflows/tests.yml/badge.svg)](https://github.com/shravanibnikam/query-plan-lab/actions/workflows/tests.yml)", "",
         "A reproducible PostgreSQL 16 experiment measuring how eight index choices change four query plans on 10 million events.", "",
-        f"The rare JSONB probe is **{speedup:.2f}× faster** with GIN on this machine. The complete matrix below includes queries that gain nothing from an index.", "",
+        f"- **GIN made its target query {abs(common_gin/common_base-1):.1%} {'slower' if common_gin > common_base else 'faster'}.** The common JSONB probe took {common_gin:,.2f} ms versus {common_base:,.2f} ms without a secondary index. The rare probe was **{speedup:.2f}× faster** with the same GIN index.",
+        f"- **An index-only scan was not the fastest q1 plan.** The {partial.size_pretty} partial index took {partial_ms:.2f} ms versus {covering_ms:.2f} ms for the {covering.size_pretty} covering index: **{1-partial_ms/covering_ms:.1%} less time**, while the covering index used **{covering.size_bytes/partial.size_bytes:.1f}× the disk space**. The covering scan had zero heap fetches.", "",
         "## Reproduce in two commands", "",
         "Requirements: Docker Engine with Compose, Python 3.11+, make, SSD storage, at least 8 GB available RAM and 15 GB free disk space. Run from the cloned repository:", "",
         "```sh", "make up", "make all", "```", "",
@@ -107,7 +110,7 @@ def main():
         name = f"{config}__{query}__run{int(row.run_no)}.json"
         plan = json.loads((RESULTS / "plans" / name).read_text())
         lines += [f"### {title}", "", note, "", f"Median execution: **{row.execution_ms:.3f} ms**. [Full JSON plan](results/plans/{name}).", "", "```text", excerpt(plan), "```", ""]
-    lines += [(RESULTS / "stale_stats.md").read_text().replace("# Stale statistics", "## Stale statistics", 1).replace("\n## Before", "\n### Before").replace("\n## After", "\n### After"),
+    lines += [readme_excerpt(stale),
               "## Acceptance results", "", "These are measured checks, including hardware-sensitive expectations from the build specification.", "",
               "| Check | Result |", "|---|---|"]
     for check, passed in checks(runs, indexes, stale).items():
