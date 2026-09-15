@@ -17,7 +17,7 @@ def write_csv(path, rows, fields=None):
     path = Path(path)
     temp = path.with_suffix(".tmp")
     with temp.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields or list(rows[0]))
+        writer = csv.DictWriter(f, fieldnames=fields or list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     temp.replace(path)
