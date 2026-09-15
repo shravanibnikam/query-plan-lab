@@ -1,6 +1,6 @@
 """Fixed-seed data, globally sorted timestamps, and block COPY."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import numpy as np
 

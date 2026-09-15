@@ -3,13 +3,12 @@ import argparse
 import csv
 import json
 from datetime import timedelta
-from statistics import median
 
 import numpy as np
 
 from .config import ANCHOR, EVENT_COUNT, RESULTS, SEED, connect
 from .generate import copy_events, timestamps
-from .indexes import CONFIGS, drop_secondary
+from .indexes import drop_secondary
 from .plan_parse import parse
 from .queries import JOIN_SQL, Query
 from .runner import explain
@@ -28,7 +27,7 @@ def markdown(data):
     before, after = data["before"]["metrics"], data["after"]["metrics"]
     lines = ["# Stale statistics", "",
         f"Appended {data['inserted_rows']:,} rows strictly after {data['old_max']}, in "
-        f"[{data['window_start']}, {data['window_end']}). Both measurements use the same timestamp B-tree.", "",
+        f"[{data['window_start']}, {data['window_end']}). Both measurements use only primary-key indexes.", "",
         "Each phase discards one warm-up and keeps five executions; the full plan below is the median-time run.", "",
         "| Statistics | Median ms | Estimated scan rows/participant | Actual scan rows total | Raw actual/estimate | Normalized actual/estimate |",
         "|---|---:|---:|---:|---:|---:|"]
@@ -40,7 +39,8 @@ def markdown(data):
         "parallel divisor. Raw ratios retain the requested CSV definition and can exceed 2 for accurate parallel plans.", "",
         "Join choices and speedups are observations; neither a nested loop nor a hash join is forced."]
     for key, title in [("before", "Before ANALYZE"), ("after", "After ANALYZE")]:
-        lines += ["", f"## {title}", "", "```json", json.dumps(data[key]["plan"], indent=2), "```"]
+        lines += ["", "<details>", f"<summary>{title}: full plan</summary>", "", "```json",
+                  json.dumps(data[key]["plan"], indent=2), "```", "", "</details>"]
     lines += ["", f"Inserted rows cleaned up: **{data['cleaned_up']}**.", ""]
     return "\n".join(lines)
 
@@ -59,7 +59,8 @@ def main():
         if count != EVENT_COUNT or last_id != EVENT_COUNT:
             raise RuntimeError("Stale experiment requires the original dataset; run make load to reset")
         drop_secondary(conn)
-        conn.execute(CONFIGS["c1_btree_ts"][0])
+        # A timestamp B-tree lets the planner probe the current maximum even
+        # with stale statistics, weakening this histogram-boundary experiment.
         conn.execute("ANALYZE events")
         old_max = conn.execute("SELECT max(created_at) FROM events").fetchone()[0]
         start = max(ANCHOR + timedelta(days=30), old_max + timedelta(seconds=1))
