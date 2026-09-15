@@ -1,0 +1,11 @@
+{
+  "160 complete measurements": true,
+  "five unique runs per matrix cell": true,
+  "all seven secondary indexes recorded": true,
+  "q1 has an Index Only Scan": true,
+  "rare GIN probe at least 10x faster": true,
+  "stale underestimate exceeds 1000x": true,
+  "fresh estimate within a factor of two": true,
+  "all 192 matrix plans saved": true,
+  "chart and stale report exist": true
+}

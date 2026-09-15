@@ -1,0 +1,38 @@
+{
+  "platform": "Linux-6.18.51-1-lts-x86_64-with-glibc2.44",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1255U",
+  "logical_cpus": 12,
+  "host_memory_bytes": 16432508928,
+  "storage": [
+    {
+      "device": "nvme0n1",
+      "model": "KBG50ZNS512G NVMe KIOXIA 512GB",
+      "rotational": false
+    }
+  ],
+  "python": "3.14.7",
+  "packages": {
+    "psycopg": "3.3.3",
+    "numpy": "2.4.3",
+    "pandas": "3.0.1",
+    "matplotlib": "3.10.8"
+  },
+  "postgres": "PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "settings": {
+    "block_size": "8192",
+    "default_statistics_target": "100",
+    "effective_cache_size": "3GB",
+    "jit": "off",
+    "maintenance_work_mem": "1GB",
+    "max_parallel_workers": "8",
+    "max_parallel_workers_per_gather": "2",
+    "max_worker_processes": "8",
+    "parallel_leader_participation": "on",
+    "random_page_cost": "1.1",
+    "seq_page_cost": "1",
+    "shared_buffers": "1GB",
+    "track_io_timing": "on",
+    "work_mem": "64MB"
+  },
+  "database_bytes": 2510134295
+}

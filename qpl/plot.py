@@ -22,7 +22,7 @@ def draw(runs, path):
                         xytext=(0, 5), textcoords="offset points", rotation=90,
                         ha="center", va="bottom", fontsize=8)
         ax.set_yscale("log")
-        ax.set_ylim(max(lo/2, .001), hi*50)
+        ax.set_ylim(max(lo/2, .001), hi*6)
         ax.set_xticks(range(8), [c.replace("_", "\n", 1) for c in CONFIGS], rotation=25, ha="right", fontsize=8)
         ax.set_title(query.name, loc="left", fontweight="bold")
         ax.set_ylabel("Median execution time (ms, log scale)")

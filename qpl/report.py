@@ -51,7 +51,7 @@ def main():
         "## Hardware and reproducibility", "",
         f"- CPU: {env['cpu']}; {env['logical_cpus']} logical CPUs.",
         f"- Host RAM: {env['host_memory_bytes']/2**30:.2f} GiB (container limits, if configured, may be lower).",
-        f"- OS: {env['platform']}.", f"- Python: {env['python']}; packages: {env['packages']}.",
+        f"- OS: {env['platform']}.", f"- Python: {env['python']}; " + ", ".join(f"{p} {v}" for p, v in env['packages'].items()) + ".",
         f"- Host storage devices: {', '.join(d['model'] for d in env['storage']) or 'not exposed by the host'}.",
         f"- Server: {env['postgres']}.", "",
         "PostgreSQL data lives in a named Docker volume. The server settings below are pinned so configurations share a cost model and resource budget. `random_page_cost = 1.1` assumes SSD storage; storage hardware is not inferred from that setting. JIT is off to remove compilation variance, and I/O timing is enabled.", "",
@@ -61,7 +61,7 @@ def main():
         f"- {dataset['events']:,} events; {dataset['accounts']:,} accounts; seed 20260101; anchor 2026-01-01 UTC.",
         f"- Observed event timestamps: {dataset['created_min']} to {dataset['created_max']}.",
         f"- Observed `pg_stats.correlation` for `events.created_at`: **{dataset['created_at_correlation']:.6f}**. This quantifies the physical ordering that makes BRIN useful.",
-        f"- Status counts: {dataset['status']}.",
+        "- Status counts: " + ", ".join(f"{status} {count:,}" for status, count in dataset['status'].items()) + ".",
         f"- Amount NULL: {dataset['amount_null_rate']:.3%}; closed_at NULL: {dataset['closed_null_rate']:.3%}.",
         f"- Distinct payloads: {dataset['payload_templates']:,}; mobile selectivity: {dataset['mobile_selectivity']:.3%}; beta selectivity: {dataset['beta_selectivity']:.3%}.", "",
         "q1 returns account_id, created_at, and amount for failed events in the final seven days. q2 joins accounts and aggregates ok events in the final 30 days. q3a and q3b aggregate JSONB containment matches for mobile and beta respectively.", "",
@@ -115,7 +115,7 @@ def main():
     lines += ["", "## This query is slow: what do you do?", "",
         "Start with EXPLAIN (ANALYZE, BUFFERS) and compare estimated versus actual rows at the first misestimated scan or join. Account for loops and parallel workers. A large mismatch calls for checking stale statistics and data skew before adding an index. ANALYZE can correct the cost inputs, though the resulting plan still needs measurement.", "",
         "When estimates are sound, inspect rows filtered, heap fetches, statement-level reads, and temporary writes. Match the index to the predicate and selected columns. Re-measure representative common and rare values, and weigh median latency against index size, build time, and write-maintenance costs. This experiment measures reads and builds; it does not quantify ongoing write amplification.", "", DECISIONS]
-    (RESULTS.parent / "README.md").write_text("\n".join(lines)+"\n")
+    (RESULTS.parent / "README.md").write_text("\n".join(lines).rstrip()+"\n")
 
 if __name__ == "__main__":
     main()

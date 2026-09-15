@@ -1,0 +1,17 @@
+{
+  "events": 10000000,
+  "accounts": 200000,
+  "status": {
+    "failed": 500051,
+    "ok": 8000146,
+    "pending": 1499803
+  },
+  "amount_null_rate": 0.0200416,
+  "closed_null_rate": 0.4000418,
+  "created_min": "2024-01-01T00:01:15+00:00",
+  "created_max": "2025-12-31T23:59:59+00:00",
+  "payload_templates": 5000,
+  "mobile_selectivity": 0.3499378,
+  "beta_selectivity": 0.0050098,
+  "created_at_correlation": 1.0
+}

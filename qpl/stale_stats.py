@@ -9,7 +9,7 @@ import numpy as np
 from .config import ANCHOR, EVENT_COUNT, RESULTS, SEED, connect
 from .generate import copy_events, timestamps
 from .indexes import drop_secondary
-from .plan_parse import parse
+from .plan_parse import parse, walk
 from .queries import JOIN_SQL, Query
 from .runner import explain
 
@@ -38,10 +38,14 @@ def markdown(data):
         "The normalized ratio compares total actual rows with total estimated rows, accounting for PostgreSQL's "
         "parallel divisor. Raw ratios retain the requested CSV definition and can exceed 2 for accurate parallel plans.", "",
         "Join choices and speedups are observations; neither a nested loop nor a hash join is forced."]
+    joins = {phase: ", ".join(sorted({node["Node Type"] for node in walk(data[phase]["plan"][0]["Plan"])
+                                      if node["Node Type"] in {"Nested Loop", "Hash Join", "Merge Join"}}))
+             for phase in ["before", "after"]}
+    lines += ["", f"Observed join choice: **{joins['before']} → {joins['after']}** after ANALYZE."]
     for key, title in [("before", "Before ANALYZE"), ("after", "After ANALYZE")]:
         lines += ["", "<details>", f"<summary>{title}: full plan</summary>", "", "```json",
                   json.dumps(data[key]["plan"], indent=2), "```", "", "</details>"]
-    lines += ["", f"Inserted rows cleaned up: **{data['cleaned_up']}**.", ""]
+    lines += ["", f"Inserted rows cleaned up: **{'yes' if data['cleaned_up'] else 'no'}**.", ""]
     return "\n".join(lines)
 
 def main():

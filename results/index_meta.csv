@@ -1,0 +1,8 @@
+config,index_name,ddl,build_ms,size_bytes,size_pretty
+c1_btree_ts,events_ts,CREATE INDEX events_ts ON events USING btree (created_at),2785.1252749997,198459392,189 MB
+c2_btree_ts_status,events_ts_status,"CREATE INDEX events_ts_status ON events USING btree (created_at, status)",3405.824520999886,276463616,264 MB
+c3_btree_status_ts,events_status_ts,"CREATE INDEX events_status_ts ON events USING btree (status, created_at)",8150.116846999936,276832256,264 MB
+c4_btree_partial,events_failed_ts,CREATE INDEX events_failed_ts ON events USING btree (created_at) WHERE status = 'failed',805.8295470000303,10952704,10 MB
+c5_btree_covering,events_covering,"CREATE INDEX events_covering ON events USING btree (created_at, status) INCLUDE (account_id, amount)",3650.7505429999583,423297024,404 MB
+c6_brin_ts,events_brin_ts,CREATE INDEX events_brin_ts ON events USING brin (created_at) WITH (pages_per_range = 32),1860.0231229997917,311296,304 kB
+c7_gin_payload,events_payload,CREATE INDEX events_payload ON events USING gin (payload jsonb_path_ops),17781.388018000143,110149632,105 MB
