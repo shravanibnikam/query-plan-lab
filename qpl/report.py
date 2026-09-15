@@ -52,6 +52,7 @@ def main():
         f"- CPU: {env['cpu']}; {env['logical_cpus']} logical CPUs.",
         f"- Host RAM: {env['host_memory_bytes']/2**30:.2f} GiB (container limits, if configured, may be lower).",
         f"- OS: {env['platform']}.", f"- Python: {env['python']}; packages: {env['packages']}.",
+        f"- Host storage devices: {', '.join(d['model'] for d in env['storage']) or 'not exposed by the host'}.",
         f"- Server: {env['postgres']}.", "",
         "PostgreSQL data lives in a named Docker volume. The server settings below are pinned so configurations share a cost model and resource budget. `random_page_cost = 1.1` assumes SSD storage; storage hardware is not inferred from that setting. JIT is off to remove compilation variance, and I/O timing is enabled.", "",
         "```conf", (Path(__file__).resolve().parents[1]/"postgres/postgresql.conf").read_text().strip(), "```", "",

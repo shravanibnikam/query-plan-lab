@@ -29,7 +29,7 @@ def explain(conn, query, path):
     return plan
 
 def machine_info(conn):
-    settings = dict(conn.execute("""SELECT name, setting || COALESCE(unit, '') FROM pg_settings
+    settings = dict(conn.execute("""SELECT name, current_setting(name) FROM pg_settings
         WHERE name IN ('shared_buffers','effective_cache_size','work_mem','maintenance_work_mem',
         'random_page_cost','seq_page_cost','max_worker_processes','max_parallel_workers',
         'max_parallel_workers_per_gather','jit','track_io_timing','parallel_leader_participation',
@@ -39,8 +39,14 @@ def machine_info(conn):
         cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
                     if line.startswith("model name")), cpu)
     memory = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") if hasattr(os, "sysconf") else None
+    storage = []
+    for device in Path("/sys/block").glob("*"):
+        model = device / "device/model"
+        if model.exists():
+            storage.append({"device": device.name, "model": model.read_text().strip(),
+                            "rotational": (device / "queue/rotational").read_text().strip() == "1"})
     return dict(platform=platform.platform(), cpu=cpu, logical_cpus=os.cpu_count(),
-                host_memory_bytes=memory, python=platform.python_version(),
+                host_memory_bytes=memory, storage=storage, python=platform.python_version(),
                 packages={p: importlib.metadata.version(p) for p in ("psycopg", "numpy", "pandas", "matplotlib")},
                 postgres=conn.execute("SELECT version()").fetchone()[0], settings=settings,
                 database_bytes=conn.execute("SELECT pg_database_size(current_database())").fetchone()[0])
