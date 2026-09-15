@@ -24,6 +24,14 @@ class Sink:
         self.blocks.append(block)
 
 class GeneratorTests(unittest.TestCase):
+    def test_float_rounding_cannot_include_exclusive_endpoint(self):
+        class TinyDraw:
+            def uniform(self, low, high, count):
+                return np.array([0., 1e-12, .5])
+        end = ANCHOR + timedelta(days=7)
+        values = timestamps(TinyDraw(), 3, ANCHOR, end)
+        self.assertLess(values.max(), end.timestamp())
+
     def test_pool_selectivities_and_uniqueness(self):
         pool = payload_pool()
         docs = [json.loads(p) for p in pool]

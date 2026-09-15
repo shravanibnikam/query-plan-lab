@@ -23,7 +23,8 @@ def timestamps(rng, count, start, end, recent=True):
     if recent:
         u = 1 - u ** 3
     seconds = int((end - start).total_seconds())
-    values = int(start.timestamp()) + (u * seconds).astype(np.int64)
+    # 1-U^3 can round to exactly 1.0 for tiny U; keep the end exclusive.
+    values = int(start.timestamp()) + np.minimum((u * seconds).astype(np.int64), seconds-1)
     values.sort()
     return values
 
